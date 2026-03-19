@@ -1,0 +1,18 @@
+{
+  "name": "my-fullstack-app",
+  "version": "1.0.0",
+  "description": "A simple full-stack application with a functional feature.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node backend/src/app.js",
+    "client": "npm start --prefix frontend",
+    "dev": "concurrently \"npm run start\" \"npm run client\"",
+    "build": "npm run build --prefix frontend"
+  },
+  "dependencies": {
+    "concurrently": "^6.0.0"
+  },
+  "devDependencies": {},
+  "author": "Your Name",
+  "license": "MIT"
+}
