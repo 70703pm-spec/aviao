@@ -1,4 +1,3 @@
-import ItemList from './ItemList';
-import ItemForm from './ItemForm';
+import GodsEyeDashboard from './GodsEyeDashboard';
 
-export { ItemList, ItemForm };
+export { GodsEyeDashboard };

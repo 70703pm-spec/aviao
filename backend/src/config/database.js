@@ -1,23 +1,29 @@
 const mongoose = require('mongoose');
 
 const dbConfig = {
-    uri: 'mongodb://localhost:27017/mydatabase', // Replace with your database URI
+    uri: process.env.MONGO_URI || 'mongodb://localhost:27017/mydatabase',
     options: {
         useNewUrlParser: true,
         useUnifiedTopology: true,
     },
 };
 
-const connectDB = async () => {
+let dbConnected = false;
+
+const connectToDatabase = async () => {
     try {
         await mongoose.connect(dbConfig.uri, dbConfig.options);
-        console.log('Database connected successfully');
+        dbConnected = true;
+        // Database connected successfully
     } catch (error) {
-        console.error('Database connection failed:', error);
-        process.exit(1);
+        dbConnected = false;
+        console.warn('Database connection failed, running in degraded mode:', error.message);
     }
 };
 
+const isDatabaseConnected = () => dbConnected;
+
 module.exports = {
-    connectDB,
+    connectToDatabase,
+    isDatabaseConnected,
 };

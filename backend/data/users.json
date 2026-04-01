@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "id": "usr_2cdcfc4be164b6072153",
+      "username": "operator",
+      "displayName": "Primary Operator",
+      "role": "administrator",
+      "passwordHash": "33eee3c0193769a266fec3a3af189654:2033eb867f701dd6c5df0ef691f71e87d1e966ec41c80ad9234502d036369367a9bc9ed55ec7767ca44761f27b35610ea634496b566a9d296d7cc9d681d82c69",
+      "sessions": [
+        {
+          "id": "ses_f18c879f87e32872afad",
+          "tokenHash": "70d1c2a5a6d5a5e893a2d22d17e86a23027569333e8943d86c902789b74db00b",
+          "createdAt": "2026-04-01T17:14:26.327Z",
+          "expiresAt": "2026-04-15T17:14:26.327Z",
+          "lastSeenAt": "2026-04-01T17:14:26.327Z"
+        }
+      ],
+      "createdAt": "2026-04-01T17:03:06.759Z",
+      "updatedAt": "2026-04-01T17:14:26.327Z"
+    }
+  ]
+}
