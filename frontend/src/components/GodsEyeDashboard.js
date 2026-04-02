@@ -233,9 +233,10 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     satellites: true,
     military: true,
     seismic: false,
-    cctv: false,
+    cctv: true,
     streetTraffic: false
   });
+  const [cctvDirectoryQuery, setCctvDirectoryQuery] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
@@ -282,6 +283,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const [cctvFeedState, setCctvFeedState] = useState({
     status: 'idle',
     feed: null,
+    feeds: [],
     error: ''
   });
 
@@ -349,7 +351,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     }
 
     setSelectedCctvId(null);
-    setCctvFeedState({ status: 'idle', feed: null, error: '' });
+    setCctvFeedState({ status: 'idle', feed: null, feeds: [], error: '' });
     setPendingIntelFocus((previous) => (previous === 'cctv' ? null : previous));
     setFocusTarget((previous) => (previous?.kind === 'cctv' ? null : previous));
   }, [intelLayers.cctv]);
@@ -381,7 +383,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   useEffect(() => {
     if (selectedFlightId) {
       setSelectedCctvId(null);
-      setCctvFeedState({ status: 'idle', feed: null, error: '' });
+      setCctvFeedState({ status: 'idle', feed: null, feeds: [], error: '' });
       setFocusTarget(null);
       setPendingIntelFocus(null);
       setTrackTarget(true);
@@ -789,6 +791,36 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     [cctvNodes, selectedCctvId]
   );
 
+  const cctvDirectoryNodes = useMemo(() => {
+    const normalizedQuery = cctvDirectoryQuery.trim().toLowerCase();
+
+    return [...cctvNodes]
+      .filter((node) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        return `${node.city} ${node.source}`.toLowerCase().includes(normalizedQuery);
+      })
+      .sort((left, right) => {
+        if (left.id === selectedCctvId) {
+          return -1;
+        }
+
+        if (right.id === selectedCctvId) {
+          return 1;
+        }
+
+        const feedDelta = (right.feedCount || 0) - (left.feedCount || 0);
+        if (feedDelta !== 0) {
+          return feedDelta;
+        }
+
+        return left.city.localeCompare(right.city);
+      })
+      .slice(0, 12);
+  }, [cctvDirectoryQuery, cctvNodes, selectedCctvId]);
+
   const cctvSensorVolumes = useMemo(
     () => buildProjectedCctvRays(cctvNodes).map((ray) => ({
       id: ray.id,
@@ -807,15 +839,29 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     [...makeSensorVolumes(cameraRegion, selectedFlight), ...cctvSensorVolumes]
   ), [cameraRegion, selectedFlight, cctvSensorVolumes]);
 
+  const handleCctvFeedSwitch = useCallback((feedId) => {
+    if (!feedId) {
+      return;
+    }
+
+    setCctvFeedState((previous) => {
+      const nextFeed = previous.feeds.find((feed) => feed.id === feedId) || previous.feed;
+      return {
+        ...previous,
+        feed: nextFeed || null
+      };
+    });
+  }, []);
+
   useEffect(() => {
     if (!selectedCctvId) {
-      setCctvFeedState({ status: 'idle', feed: null, error: '' });
+      setCctvFeedState({ status: 'idle', feed: null, feeds: [], error: '' });
       return;
     }
 
     if (!selectedCctvNode) {
       setSelectedCctvId(null);
-      setCctvFeedState({ status: 'idle', feed: null, error: '' });
+      setCctvFeedState({ status: 'idle', feed: null, feeds: [], error: '' });
       return;
     }
 
@@ -825,18 +871,23 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     setCctvFeedState({
       status: 'loading',
       feed: null,
+      feeds: [],
       error: ''
     });
 
     resolveCctvFeed(selectedCctvNode, { signal: controller.signal })
-      .then((feed) => {
+      .then((result) => {
         if (!active) {
           return;
         }
 
+        const feeds = Array.isArray(result?.feeds) ? result.feeds : [];
+        const initialFeed = feeds.find((feed) => feed.id === result?.selectedFeedId) || feeds[0] || null;
+
         setCctvFeedState({
-          status: feed?.embedUrl || feed?.externalUrl ? 'ready' : 'empty',
-          feed: feed || null,
+          status: initialFeed?.embedUrl || initialFeed?.externalUrl ? 'ready' : 'empty',
+          feed: initialFeed,
+          feeds,
           error: ''
         });
       })
@@ -848,6 +899,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
         setCctvFeedState({
           status: 'error',
           feed: null,
+          feeds: [],
           error: error.message || 'Failed to load CCTV feed'
         });
       });
@@ -1057,7 +1109,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const handleSelectFlight = useCallback((nextFlightId) => {
     setSelectedFlightId(nextFlightId);
     setSelectedCctvId(null);
-    setCctvFeedState({ status: 'idle', feed: null, error: '' });
+    setCctvFeedState({ status: 'idle', feed: null, feeds: [], error: '' });
     setFocusTarget(null);
     setPendingIntelFocus(null);
 
@@ -1078,7 +1130,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const handleSelectCctv = useCallback((nextNodeId) => {
     if (!nextNodeId) {
       setSelectedCctvId(null);
-      setCctvFeedState({ status: 'idle', feed: null, error: '' });
+      setCctvFeedState({ status: 'idle', feed: null, feeds: [], error: '' });
       setFocusTarget((previous) => (previous?.kind === 'cctv' ? null : previous));
       return;
     }
@@ -1603,13 +1655,30 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
             <div className="cctv-feed-head">
               <div>
                 <strong>{selectedCctvNode.city} CCTV</strong>
-                <span>{selectedCctvNode.status} · {selectedCctvNode.source}</span>
+                <span>
+                  {selectedCctvNode.status} · {selectedCctvNode.source} · {cctvFeedState.feeds.length || selectedCctvNode.feedCount || 0} camera options
+                </span>
               </div>
               <button type="button" onClick={() => handleSelectCctv(null)}>Close</button>
             </div>
 
             {cctvFeedState.status === 'loading' && (
               <div className="target-empty">Resolving public camera feed...</div>
+            )}
+
+            {cctvFeedState.status === 'ready' && cctvFeedState.feeds.length > 1 && (
+              <div className="cctv-feed-switcher">
+                {cctvFeedState.feeds.map((feed) => (
+                  <button
+                    key={feed.id}
+                    type="button"
+                    className={cctvFeedState.feed?.id === feed.id ? 'active' : ''}
+                    onClick={() => handleCctvFeedSwitch(feed.id)}
+                  >
+                    {feed.title}
+                  </button>
+                ))}
+              </div>
             )}
 
             {cctvFeedState.status === 'ready' && cctvFeedState.feed?.embedUrl && (
@@ -1654,7 +1723,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
                 target="_blank"
                 rel="noreferrer"
               >
-                Open Source Feed
+                Open Camera Source
               </a>
             )}
           </div>
@@ -1664,20 +1733,39 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
           </div>
         )}
 
-        <div className="panel-subtitle">Intel Watchlist</div>
-        {(intelLayers.cctv && cctvNodes.length) || (intelLayers.seismic && seismicEvents.length) ? (
-          <div className="link-list">
-            {intelLayers.cctv && cctvNodes.slice(0, 4).map((node) => (
-              <div key={node.id}>
-                <strong>{node.city} CCTV</strong>
-                <span>{node.status} · {node.source}</span>
-                <div className="feed-actions-row">
-                  <button type="button" onClick={() => focusCctvNode(node)}>Focus</button>
-                  <button type="button" onClick={() => handleSelectCctv(node.id)}>Watch</button>
+        <div className="panel-subtitle">City Camera Directory</div>
+        {intelLayers.cctv && cctvNodes.length ? (
+          <>
+            <input
+              type="text"
+              className="watchlist-filter-input"
+              value={cctvDirectoryQuery}
+              placeholder="Find city camera"
+              onChange={(event) => setCctvDirectoryQuery(event.target.value)}
+            />
+            <div className="link-list">
+              {cctvDirectoryNodes.map((node) => (
+                <div key={node.id}>
+                  <strong>{node.city} CCTV</strong>
+                  <span>
+                    {node.status} · {node.source} · {node.feedCount > 0 ? `${node.feedCount} public ${node.feedCount === 1 ? 'feed' : 'feeds'}` : 'public lookup'}
+                  </span>
+                  <div className="feed-actions-row">
+                    <button type="button" onClick={() => focusCctvNode(node)}>Focus</button>
+                    <button type="button" onClick={() => handleSelectCctv(node.id)}>Watch</button>
+                  </div>
                 </div>
-              </div>
-            ))}
-            {intelLayers.seismic && seismicEvents.slice(0, 4).map((event) => (
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="target-empty">Enable CCTV to populate the city camera directory.</div>
+        )}
+
+        <div className="panel-subtitle">Seismic Watchlist</div>
+        {intelLayers.seismic && seismicEvents.length ? (
+          <div className="link-list">
+            {seismicEvents.slice(0, 4).map((event) => (
               <div key={event.id}>
                 <strong>{event.region}</strong>
                 <span>M{Number(event.magnitude || 0).toFixed(1)} · {Math.round(event.depthKm || 0)} km depth</span>
@@ -1686,7 +1774,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
             ))}
           </div>
         ) : (
-          <div className="target-empty">Enable CCTV or seismic to populate focus targets.</div>
+          <div className="target-empty">Enable seismic to populate event focus targets.</div>
         )}
 
         <div className="panel-subtitle">Track Linking Graph</div>

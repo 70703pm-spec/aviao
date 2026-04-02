@@ -2,6 +2,10 @@ import {
   INTEL_POLL_STARTUP_MS,
   INTEL_POLL_STEADY_MS
 } from '../config/constants';
+import {
+  getCuratedCctvFeedCount,
+  getCuratedCctvFeeds
+} from '../data/cctvCatalog';
 import { destinationPoint } from '../utils/geo';
 
 const SATELLITE_API_URL = process.env.REACT_APP_SATELLITE_API_URL || '';
@@ -15,120 +19,6 @@ const WINDY_WEBCAMS_KEY = process.env.REACT_APP_WINDY_WEBCAMS_KEY || '';
 
 const REQUEST_TIMEOUT_MS = 9000;
 const DEFAULT_PUBLIC_FEED_URL = 'https://www.youtube.com/@earthcam/live';
-
-const CURATED_CCTV_FEEDS = {
-  nycHarbor: {
-    title: 'Statue of Liberty Live',
-    provider: 'EarthCam / YouTube',
-    videoId: 'cWR8KGKftUw',
-    externalUrl: 'https://www.youtube.com/watch?v=cWR8KGKftUw'
-  },
-  newOrleansStreet: {
-    title: 'New Orleans Street View',
-    provider: 'EarthCam / YouTube',
-    videoId: 'UUhTr19MH0k',
-    externalUrl: 'https://www.youtube.com/watch?v=UUhTr19MH0k'
-  },
-  chicagoSkydeck: {
-    title: 'Chicago Skydeck Cam',
-    provider: 'EarthCam / YouTube',
-    videoId: 'sQxL8t0gtu8',
-    externalUrl: 'https://www.youtube.com/watch?v=sQxL8t0gtu8'
-  },
-  londonAbbeyRoad: {
-    title: 'Abbey Road Crossing',
-    provider: 'EarthCam / YouTube',
-    videoId: 'Lxqcg1qt0XU',
-    externalUrl: 'https://www.youtube.com/watch?v=Lxqcg1qt0XU'
-  },
-  spainTamariu: {
-    title: 'Tamariu Coast Live',
-    provider: 'EarthCam / YouTube',
-    videoId: 'PMhVgTcDd1o',
-    externalUrl: 'https://www.youtube.com/watch?v=PMhVgTcDd1o'
-  },
-  jerusalemWall: {
-    title: 'Western Wall Live',
-    provider: 'EarthCam / YouTube',
-    videoId: '77akujLn4k8',
-    externalUrl: 'https://www.youtube.com/watch?v=77akujLn4k8'
-  },
-  tokyoShinjuku: {
-    title: 'Tokyo Shinjuku Live Cam',
-    provider: 'Tokyo Shinjuku Live Ch / YouTube',
-    videoId: 'RQA5RcIZlAM',
-    externalUrl: 'https://www.youtube.com/watch?v=RQA5RcIZlAM'
-  },
-  hongKongPeak: {
-    title: 'Hong Kong Victoria Harbour Live',
-    provider: 'HK360VR / YouTube',
-    videoId: '-sNMaIFE8pQ',
-    externalUrl: 'https://www.youtube.com/watch?v=-sNMaIFE8pQ'
-  },
-  sydneyHarbour: {
-    title: 'Sydney Harbour Live',
-    provider: 'WebcamSydney / YouTube',
-    videoId: 'nJ9sRmIH6Dk',
-    externalUrl: 'https://www.youtube.com/watch?v=nJ9sRmIH6Dk'
-  }
-};
-
-const SKYLINE_CCTV_FEEDS = {
-  'nyc-midtown-01': {
-    title: 'Times Square Live',
-    externalUrl: 'https://www.skylinewebcams.com/webcam/united-states/new-york/new-york/times-square.html'
-  },
-  'paris-seine-08': {
-    title: 'Eiffel Tower Live',
-    externalUrl: 'https://www.skylinewebcams.com/es/webcam/france/ile-de-france/paris/tour-eiffel.html'
-  },
-  'rome-centro-11': {
-    title: 'Piazza Navona Live',
-    externalUrl: 'https://www.skylinewebcams.com/en/webcam/italia/lazio/roma/piazza-navona.html'
-  },
-  'madrid-sol-10': {
-    title: 'Puerta del Sol Live',
-    externalUrl: 'https://www.skylinewebcams.com/es/webcam/espana/comunidad-de-madrid/madrid/puerta-del-sol-tio-pepe.html'
-  },
-  'sydney-harbour-26': {
-    title: 'Sydney Opera House Live',
-    externalUrl: 'https://www.skylinewebcams.com/webcam/australia/new-south-wales/sydney/opera-house.html'
-  }
-};
-
-const CCTV_FEED_ASSIGNMENTS = {
-  'nyc-midtown-01': 'nycHarbor',
-  'dc-capitol-02': 'nycHarbor',
-  'la-downtown-03': 'chicagoSkydeck',
-  'mex-centro-04': 'newOrleansStreet',
-  'bogota-core-05': 'newOrleansStreet',
-  'lima-core-06': 'newOrleansStreet',
-  'santiago-centro-07': 'newOrleansStreet',
-  'sao-centro-05': 'newOrleansStreet',
-  'london-city-02': 'londonAbbeyRoad',
-  'paris-seine-08': 'londonAbbeyRoad',
-  'berlin-mitte-09': 'londonAbbeyRoad',
-  'madrid-sol-10': 'spainTamariu',
-  'rome-centro-11': 'spainTamariu',
-  'istanbul-bosporus-12': 'jerusalemWall',
-  'cairo-nile-13': 'jerusalemWall',
-  'lagos-marina-14': 'jerusalemWall',
-  'nairobi-core-15': 'jerusalemWall',
-  'joburg-core-16': 'jerusalemWall',
-  'dubai-marina-04': 'jerusalemWall',
-  'riyadh-core-17': 'jerusalemWall',
-  'mumbai-fort-18': 'hongKongPeak',
-  'delhi-core-19': 'hongKongPeak',
-  'bangkok-core-20': 'hongKongPeak',
-  'singapore-bay-21': 'hongKongPeak',
-  'jakarta-core-22': 'hongKongPeak',
-  'manila-bay-23': 'hongKongPeak',
-  'hongkong-central-24': 'hongKongPeak',
-  'tokyo-shibuya-03': 'tokyoShinjuku',
-  'seoul-core-25': 'tokyoShinjuku',
-  'sydney-harbour-26': 'sydneyHarbour',
-  'auckland-core-27': 'sydneyHarbour'
-};
 
 const liveCache = {
   snapshot: null,
@@ -231,43 +121,94 @@ function buildYouTubeEmbedUrl(videoId) {
   return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0`;
 }
 
-function buildSkylineFeed(node, externalUrl, title = '') {
+function buildSkylineFeed(
+  node,
+  externalUrl,
+  title = '',
+  id = '',
+  provider = 'Skyline Webcams',
+  source = 'skyline',
+  note = ''
+) {
   if (!externalUrl) {
     return null;
   }
 
   return {
-    id: `skyline-${node.id}`,
+    id: id || `skyline-${node.id}`,
     title: title || `${node.city || 'Skyline'} Live Feed`,
-    provider: 'Skyline Webcams',
-    source: 'skyline',
+    provider,
+    source,
     embedUrl: '',
     externalUrl,
-    note: 'Skyline Webcams restricts inline live video embedding to webcam hosts. Use the source link to open the live page, or provide a direct stream URL from your CCTV API for in-dashboard playback.'
+    note: note || 'Skyline Webcams restrict inline live embedding on third-party hosts. Use the source link to open the live page, or provide a direct stream URL from your CCTV API for in-dashboard playback.'
   };
 }
 
-function buildCuratedFeed(node) {
-  const skylineFeed = SKYLINE_CCTV_FEEDS[node.id];
-  if (skylineFeed) {
-    return buildSkylineFeed(node, skylineFeed.externalUrl, skylineFeed.title);
+function buildCuratedFeeds(node) {
+  const curatedFeeds = getCuratedCctvFeeds(node?.id);
+  if (!curatedFeeds.length) {
+    return [];
   }
 
-  const feedId = CCTV_FEED_ASSIGNMENTS[node.id];
-  const curated = feedId ? CURATED_CCTV_FEEDS[feedId] : null;
-  if (!curated) {
-    return null;
-  }
+  return curatedFeeds
+    .map((feed, index) => {
+      const externalUrl = feed.externalUrl || '';
+      const videoId = feed.videoId || extractYouTubeVideoId(externalUrl);
 
+      if (externalUrl.includes('skylinewebcams.com')) {
+        return buildSkylineFeed(
+          node,
+          externalUrl,
+          feed.title,
+          feed.id || `curated-skyline-${node.id}-${index}`,
+          feed.provider || 'Skyline Webcams',
+          'curated',
+          feed.note
+        );
+      }
+
+      return {
+        id: feed.id || `curated-${node.id}-${index}`,
+        title: feed.title || `${node.city || 'CCTV'} Live Feed`,
+        provider: feed.provider || 'Curated public camera',
+        source: 'curated',
+        embedUrl: videoId ? buildYouTubeEmbedUrl(videoId) : '',
+        externalUrl: externalUrl || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : ''),
+        note: feed.note || 'Using a curated public city camera.'
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildFallbackFeed(node, note) {
   return {
-    id: `curated-${feedId}`,
-    title: `${node.city || curated.title} Live Feed`,
-    provider: curated.provider,
-    source: 'curated',
-    embedUrl: buildYouTubeEmbedUrl(curated.videoId),
-    externalUrl: curated.externalUrl,
-    note: 'Using a curated public live stream matched to this region. Add a Windy Webcams key for nearby camera lookup.'
+    id: `fallback-${node.id}`,
+    title: `${node.city || 'CCTV'} live feed unavailable`,
+    provider: 'Public CCTV fallback',
+    source: 'fallback',
+    embedUrl: '',
+    externalUrl: DEFAULT_PUBLIC_FEED_URL,
+    note
   };
+}
+
+function dedupeFeeds(feeds) {
+  const seen = new Set();
+
+  return feeds.filter((feed) => {
+    if (!feed) {
+      return false;
+    }
+
+    const key = feed.embedUrl || feed.externalUrl || feed.id;
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
 }
 
 function extractYouTubeVideoId(streamUrl) {
@@ -458,6 +399,7 @@ export function buildMockCctv(nowMs = Date.now()) {
     ...node,
     headingDeg: normalizeAngle(node.headingDeg + Math.sin(nowMs * 0.00016 + index) * 18),
     status: Math.sin(nowMs * 0.0004 + index * 0.8) > -0.75 ? 'online' : 'offline',
+    feedCount: getCuratedCctvFeedCount(node.id),
     updatedAt: nowMs
   }));
 }
@@ -601,7 +543,11 @@ function mapRemoteCctv(payload) {
         source: record.source || 'remote',
         status: record.status || 'online',
         streamUrl: record.streamUrl || '',
-        externalUrl: record.externalUrl || ''
+        externalUrl: record.externalUrl || '',
+        feedCount: Math.max(
+          getCuratedCctvFeedCount(record.id || ''),
+          record.streamUrl || record.externalUrl ? 1 : 0
+        )
       };
     })
     .filter(Boolean);
@@ -688,7 +634,7 @@ async function fetchCctv(nowMs, signal) {
     return {
       source: 'mock',
       items: buildMockCctv(nowMs),
-      note: 'CCTV feed unavailable; using projected camera nodes.'
+      note: 'Using the built-in public city camera directory. Add REACT_APP_CCTV_API_URL for your own live CCTV telemetry feed.'
     };
   }
 
@@ -843,48 +789,52 @@ export async function resolveCctvFeed(node, { signal } = {}) {
     return null;
   }
 
+  const feedCandidates = [];
   const directFeed = normalizeDirectFeed(node);
   if (directFeed) {
-    return directFeed;
+    feedCandidates.push(directFeed);
   }
 
+  let windyError = '';
+
   try {
-    const windyFeed = await fetchWindyFeed(node, signal);
-    if (windyFeed) {
-      return windyFeed;
+    if (!directFeed) {
+      const windyFeed = await fetchWindyFeed(node, signal);
+      if (windyFeed) {
+        feedCandidates.push(windyFeed);
+      }
     }
   } catch (error) {
-    const fallbackFeed = buildCuratedFeed(node);
-    if (fallbackFeed) {
-      return {
-        ...fallbackFeed,
-        note: `${fallbackFeed.note} Windy lookup failed: ${error.message}`
+    windyError = error.message || 'Windy webcam lookup failed';
+  }
+
+  feedCandidates.push(...buildCuratedFeeds(node));
+
+  const feeds = dedupeFeeds(feedCandidates);
+
+  if (feeds.length) {
+    if (windyError) {
+      feeds[0] = {
+        ...feeds[0],
+        note: `${feeds[0].note} Windy lookup failed: ${windyError}`
       };
     }
 
     return {
-      id: `fallback-${node.id}`,
-      title: `${node.city || 'CCTV'} live feed unavailable`,
-      provider: 'Public CCTV fallback',
-      source: 'fallback',
-      embedUrl: '',
-      externalUrl: DEFAULT_PUBLIC_FEED_URL,
-      note: `Windy lookup failed: ${error.message}. Add REACT_APP_WINDY_WEBCAMS_KEY or provide streamUrl in the CCTV API.`
+      feeds,
+      selectedFeedId: feeds[0].id
     };
   }
 
-  const curatedFeed = buildCuratedFeed(node);
-  if (curatedFeed) {
-    return curatedFeed;
-  }
-
   return {
-    id: `fallback-${node.id}`,
-    title: `${node.city || 'CCTV'} live feed unavailable`,
-    provider: 'Public CCTV fallback',
-    source: 'fallback',
-    embedUrl: '',
-    externalUrl: DEFAULT_PUBLIC_FEED_URL,
-    note: 'No direct public feed matched this CCTV node. Add REACT_APP_WINDY_WEBCAMS_KEY or provide streamUrl in the CCTV API.'
+    feeds: [
+      buildFallbackFeed(
+        node,
+        windyError
+          ? `Windy lookup failed: ${windyError}. Add REACT_APP_WINDY_WEBCAMS_KEY or provide a direct stream URL in the CCTV API.`
+          : 'No direct public feed matched this CCTV node yet. Add REACT_APP_WINDY_WEBCAMS_KEY or provide a direct stream URL in the CCTV API.'
+      )
+    ],
+    selectedFeedId: `fallback-${node.id}`
   };
 }

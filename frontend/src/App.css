@@ -575,6 +575,11 @@ select {
   margin-top: 4px;
 }
 
+.watchlist-filter-input {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
 .cctv-feed-card {
   display: grid;
   gap: 8px;
@@ -607,6 +612,24 @@ select {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.cctv-feed-switcher {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+}
+
+.cctv-feed-switcher button {
+  min-height: 42px;
+  text-align: left;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.cctv-feed-switcher button.active {
+  border-color: rgba(145, 228, 253, 0.68);
+  box-shadow: 0 0 0 1px rgba(145, 228, 253, 0.18) inset;
 }
 
 .cctv-feed-frame {
