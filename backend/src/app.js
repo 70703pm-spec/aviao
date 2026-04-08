@@ -68,7 +68,11 @@ app.use((req, res, next) => {
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+    if (!isDatabaseConnected()) {
+        await connectToDatabase();
+    }
+
     res.status(200).json({
         status: 'ok',
         uptimeSeconds: Math.round((Date.now() - serverStartedAt) / 1000),

@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
+const { connectToDatabase } = require('../config/database');
 const User = require('../models/user');
 
 const DEFAULT_USERNAME = (process.env.AUTH_DEFAULT_USERNAME || 'operator').trim().toLowerCase();
@@ -31,6 +32,15 @@ function databaseUnavailableResult() {
         status: 503,
         error: 'Authentication database unavailable. Start MongoDB and set MONGO_URI before using sign in.'
     };
+}
+
+async function ensureAuthDatabaseReady() {
+    if (isDatabaseReady()) {
+        return true;
+    }
+
+    await connectToDatabase();
+    return isDatabaseReady();
 }
 
 function normalizeUsername(value) {
@@ -260,7 +270,7 @@ async function createSessionForUser(user) {
 }
 
 async function ensureAuthStore() {
-    if (!isDatabaseReady()) {
+    if (!await ensureAuthDatabaseReady()) {
         return null;
     }
 
@@ -300,7 +310,7 @@ async function ensureAuthStore() {
 }
 
 async function loginUser(identifier, password) {
-    if (!isDatabaseReady()) {
+    if (!await ensureAuthDatabaseReady()) {
         return databaseUnavailableResult();
     }
 
@@ -355,7 +365,7 @@ async function registerUser({
     displayName,
     password
 }) {
-    if (!isDatabaseReady()) {
+    if (!await ensureAuthDatabaseReady()) {
         return databaseUnavailableResult();
     }
 
@@ -435,7 +445,11 @@ async function registerUser({
 }
 
 async function getSession(token) {
-    if (!token || !isDatabaseReady()) {
+    if (!token) {
+        return null;
+    }
+
+    if (!await ensureAuthDatabaseReady()) {
         return null;
     }
 
@@ -469,7 +483,11 @@ async function getSession(token) {
 }
 
 async function logoutSession(token) {
-    if (!token || !isDatabaseReady()) {
+    if (!token) {
+        return false;
+    }
+
+    if (!await ensureAuthDatabaseReady()) {
         return false;
     }
 
@@ -725,7 +743,7 @@ async function upsertOAuthUser(profile) {
 }
 
 async function completeOAuthLogin(provider, code, state) {
-    if (!isDatabaseReady()) {
+    if (!await ensureAuthDatabaseReady()) {
         return databaseUnavailableResult();
     }
 
