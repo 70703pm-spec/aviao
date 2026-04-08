@@ -1,3 +1,12 @@
+const fs = require('fs');
+const path = require('path');
+
+const envFilePath = path.resolve(__dirname, '../.env');
+
+if (typeof process.loadEnvFile === 'function' && fs.existsSync(envFilePath)) {
+    process.loadEnvFile(envFilePath);
+}
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { setRoutes } = require('./routes/index');
@@ -6,7 +15,13 @@ const { ensureAuthStore } = require('./services/authStore');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
-const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const configuredOrigins = String(process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+const allowedOrigins = configuredOrigins.length > 0
+    ? configuredOrigins
+    : ['http://localhost:3000', 'http://localhost:3004'];
 
 const serverStartedAt = Date.now();
 const requestCounts = new Map();
@@ -33,9 +48,15 @@ app.use((req, res, next) => {
 
 // Middleware
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', allowedOrigin);
+    const requestOrigin = req.headers.origin;
+    const allowOrigin = requestOrigin && allowedOrigins.includes(requestOrigin)
+        ? requestOrigin
+        : allowedOrigins[0];
+
+    res.header('Access-Control-Allow-Origin', allowOrigin);
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.header('Vary', 'Origin');
 
     if (req.method === 'OPTIONS') {
         return res.sendStatus(204);
@@ -88,10 +109,11 @@ app.get('/metrics', (req, res) => {
 });
 
 // Connect to the database
-connectToDatabase();
-ensureAuthStore().catch((error) => {
-    console.warn('Auth store bootstrap failed:', error.message);
-});
+connectToDatabase()
+    .then(() => ensureAuthStore().catch((error) => {
+        console.warn('Auth store bootstrap failed:', error.message);
+    }))
+    .catch(() => null);
 
 // Set up routes
 setRoutes(app);

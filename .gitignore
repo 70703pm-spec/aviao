@@ -2,3 +2,10 @@
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+.env
+.env.local
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+frontend/node_modules/.cache/

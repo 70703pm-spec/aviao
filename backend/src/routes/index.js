@@ -8,7 +8,11 @@ const itemController = new ItemController(Item);
 const authController = new AuthController();
 
 function setRoutes(app) {
+    router.post('/auth/register', authController.register.bind(authController));
     router.post('/auth/login', authController.login.bind(authController));
+    router.get('/auth/providers', authController.providers.bind(authController));
+    router.get('/auth/oauth/:provider', authController.startOAuth.bind(authController));
+    router.get('/auth/oauth/:provider/callback', authController.handleOAuthCallback.bind(authController));
     router.get('/auth/session', authController.session.bind(authController));
     router.post('/auth/logout', authController.logout.bind(authController));
 

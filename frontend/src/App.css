@@ -88,6 +88,90 @@ body {
   line-height: 1.6;
 }
 
+.auth-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(121, 196, 218, 0.18);
+  background: rgba(5, 17, 26, 0.62);
+}
+
+.auth-mode-button {
+  border: 1px solid rgba(121, 196, 218, 0.2);
+  background: rgba(9, 27, 39, 0.72);
+  color: var(--text-dim);
+  padding: 11px 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 11px;
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.auth-mode-button.active {
+  color: var(--text-primary);
+  border-color: rgba(145, 228, 253, 0.46);
+  background: rgba(17, 79, 104, 0.34);
+}
+
+.auth-provider-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-provider-button {
+  width: 100%;
+  border: 1px solid rgba(121, 196, 218, 0.28);
+  background: linear-gradient(180deg, rgba(12, 33, 45, 0.95), rgba(8, 22, 32, 0.92));
+  color: var(--text-primary);
+  padding: 13px 12px;
+  text-align: left;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.auth-provider-button:hover:not(:disabled),
+.auth-mode-button:hover {
+  border-color: rgba(145, 228, 253, 0.65);
+  transform: translateY(-1px);
+}
+
+.auth-provider-button:disabled,
+.auth-mode-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.auth-divider {
+  position: relative;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px solid rgba(121, 196, 218, 0.18);
+}
+
+.auth-divider span {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  padding: 0 10px;
+  background: rgba(6, 18, 27, 0.92);
+}
+
 .auth-form,
 .auth-status-card {
   display: grid;
@@ -869,6 +953,10 @@ select {
   .auth-card {
     margin: 20px auto;
     padding: 18px;
+  }
+
+  .auth-mode-switch {
+    grid-template-columns: 1fr;
   }
 
   .hud-controls {

@@ -1,50 +1,52 @@
-# Backend API Documentation
+# Backend API
 
-## Overview
-This is the backend for the full-stack application, built using Node.js and Express. It provides a RESTful API for managing items in the database.
+## Setup
 
-## Setup Instructions
+1. Copy [backend/.env.example](/Users/geisaangeli/aviao/backend/.env.example) to `backend/.env`
+2. Start MongoDB
+3. Run:
 
-1. **Clone the Repository**
-   ```bash
-   git clone <repository-url>
-   cd my-fullstack-app/backend
-   ```
+```bash
+npm install
+npm start
+```
 
-2. **Install Dependencies**
-   ```bash
-   npm install
-   ```
+## Auth Endpoints
 
-3. **Configure Database**
-   Update the database connection settings in `src/config/database.js` to match your database configuration.
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/providers`
+- `GET /api/auth/oauth/google`
+- `GET /api/auth/oauth/github`
+- `GET /api/auth/session`
+- `POST /api/auth/logout`
 
-4. **Run the Application**
-   ```bash
-   npm start
-   ```
+## Request Shapes
 
-## API Endpoints
+`POST /api/auth/register`
 
-### Get Items
-- **Endpoint:** `GET /api/items`
-- **Description:** Retrieves a list of items from the database.
-- **Response:** JSON array of items.
+```json
+{
+  "username": "flight-ops",
+  "displayName": "Flight Operations",
+  "email": "ops@example.com",
+  "password": "password123"
+}
+```
 
-### Add Item
-- **Endpoint:** `POST /api/items`
-- **Description:** Adds a new item to the database.
-- **Request Body:**
-  ```json
-  {
-    "name": "Item Name",
-    "description": "Item Description"
-  }
-  ```
-- **Response:** JSON object of the created item.
+`POST /api/auth/login`
 
-## Testing
-You can test the API using tools like Postman or cURL.
+```json
+{
+  "identifier": "flight-ops",
+  "password": "password123"
+}
+```
 
-## License
-This project is licensed under the MIT License.
+You can also send an email in `identifier`.
+
+## Notes
+
+- Local passwords are stored as hashes.
+- Sessions are stored on the user document in MongoDB.
+- Google and GitHub login stay disabled until their client keys are configured.

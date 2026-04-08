@@ -1,93 +1,86 @@
-# My Fullstack Application
+# Aviao
 
-This is a simple full-stack application that demonstrates the integration of a frontend built with React and a backend built with Express. The application allows users to manage a list of items, including adding new items and viewing existing ones.
+Aviao is a React + Express + MongoDB application with a protected operator dashboard. It now includes:
 
-## Project Structure
+- Local account creation and sign in
+- Password hashing with Node's `crypto.scrypt`
+- Database-backed session storage in MongoDB
+- Optional Google OAuth and GitHub OAuth sign in
 
-```
-my-fullstack-app
-├── backend          # Backend server
-│   ├── src
-│   │   ├── app.js                  # Entry point for the backend application
-│   │   ├── controllers
-│   │   │   └── index.js            # Controller for handling item-related requests
-│   │   ├── models
-│   │   │   └── index.js            # Database model for items
-│   │   ├── routes
-│   │   │   └── index.js            # API routes for the application
-│   │   └── config
-│   │       └── database.js         # Database configuration
-│   ├── package.json                 # Backend dependencies and scripts
-│   └── README.md                    # Documentation for the backend
-├── frontend         # Frontend application
-│   ├── src
-│   │   ├── App.js                   # Main component for the frontend
-│   │   ├── components
-│   │   │   └── index.js             # Reusable components
-│   │   ├── pages
-│   │   │   └── index.js             # Main pages of the application
-│   │   └── services
-│   │       └── api.js               # API service for making requests to the backend
-│   ├── public
-│   │   └── index.html               # Main HTML file for the frontend
-│   ├── package.json                 # Frontend dependencies and scripts
-│   └── README.md                    # Documentation for the frontend
-├── database          # Database setup
-│   ├── migrations
-│   │   └── 001_initial_schema.sql   # SQL commands for initial schema
-│   └── seeds
-│       └── sample_data.sql          # SQL commands for seeding the database
-├── package.json      # Root configuration for the entire project
-└── README.md         # Overall documentation for the full-stack application
+## Stack
+
+- Frontend: React
+- Backend: Express + Mongoose
+- Database: MongoDB
+
+## Quick Start
+
+1. Start MongoDB locally.
+2. Copy the example env files:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-## Getting Started
+3. Install dependencies if needed:
 
-### Prerequisites
+```bash
+npm install
+npm install --prefix backend
+npm install --prefix frontend
+```
 
-- Node.js
-- npm or yarn
-- MongoDB (or any other database you choose to use)
+4. Run the app:
 
-### Installation
+```bash
+npm run dev
+```
 
-1. Clone the repository:
-   ```
-   git clone <repository-url>
-   cd my-fullstack-app
-   ```
+That starts the backend on `http://localhost:3003` and the frontend on `http://localhost:3004`.
 
-2. Install backend dependencies:
-   ```
-   cd backend
-   npm install
-   ```
+## Authentication
 
-3. Install frontend dependencies:
-   ```
-   cd frontend
-   npm install
-   ```
+The backend seeds one default local operator account on startup when MongoDB is available:
 
-### Running the Application
+- Username: `operator`
+- Password: `GodsEye2026!`
 
-1. Start the backend server:
-   ```
-   cd backend
-   npm start
-   ```
+Change those defaults in [backend/.env.example](/Users/geisaangeli/aviao/backend/.env.example) before using the app outside local development.
 
-2. Start the frontend application:
-   ```
-   cd frontend
-   npm start
-   ```
+Local accounts are stored in MongoDB with:
 
-### API Usage
+- `username`
+- `email`
+- `displayName`
+- `passwordHash`
+- linked auth providers
+- active session tokens
 
-- **GET /api/items**: Retrieve a list of items.
-- **POST /api/items**: Add a new item to the list.
+Passwords are not stored in plain text.
 
-## License
+## Google And GitHub Sign In
 
-This project is licensed under the MIT License.
+Google and GitHub buttons appear automatically when the backend has credentials configured.
+
+Backend variables:
+
+- `AUTH_GOOGLE_CLIENT_ID`
+- `AUTH_GOOGLE_CLIENT_SECRET`
+- `AUTH_GITHUB_CLIENT_ID`
+- `AUTH_GITHUB_CLIENT_SECRET`
+- `AUTH_BASE_URL`
+- `FRONTEND_URL`
+- `AUTH_STATE_SECRET`
+
+For local development, make sure your OAuth apps use these callback URLs:
+
+- Google: `http://localhost:3003/api/auth/oauth/google/callback`
+- GitHub: `http://localhost:3003/api/auth/oauth/github/callback`
+
+## Useful Paths
+
+- [backend/src/services/authStore.js](/Users/geisaangeli/aviao/backend/src/services/authStore.js)
+- [backend/src/models/user.js](/Users/geisaangeli/aviao/backend/src/models/user.js)
+- [frontend/src/App.js](/Users/geisaangeli/aviao/frontend/src/App.js)
+- [frontend/src/services/auth.js](/Users/geisaangeli/aviao/frontend/src/services/auth.js)
