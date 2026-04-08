@@ -108,8 +108,8 @@ app.get('/metrics', (req, res) => {
     res.status(200).send(`${lines.join('\n')}\n`);
 });
 
-// Connect to the database
-connectToDatabase()
+// Connect eagerly so the same setup works in local dev and on Vercel.
+const databaseStartup = connectToDatabase()
     .then(() => ensureAuthStore().catch((error) => {
         console.warn('Auth store bootstrap failed:', error.message);
     }))
@@ -118,6 +118,12 @@ connectToDatabase()
 // Set up routes
 setRoutes(app);
 
-app.listen(PORT, () => {
-    // Server started successfully
-});
+if (require.main === module) {
+    databaseStartup.finally(() => {
+        app.listen(PORT, () => {
+            // Server started successfully
+        });
+    });
+}
+
+module.exports = app;
