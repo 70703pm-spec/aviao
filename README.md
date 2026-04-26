@@ -39,6 +39,15 @@ npm run dev
 
 That starts the backend on `http://localhost:3003` and the frontend on `http://localhost:3004`.
 
+## Vercel Deployment Notes
+
+When deploying from the repository root, Vercel must use the frontend build output folder:
+
+- Build Command: `npm run build`
+- Output Directory: `frontend/build`
+
+This is already configured in the root `vercel.json`.
+
 
 ## Geospatial Data Sources (WorldView Mode)
 
