@@ -3,7 +3,8 @@ function getDefaultApiBaseUrl() {
     return 'http://localhost:3003';
   }
 
-  return `${window.location.protocol}//${window.location.hostname}:3003`;
+  const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  return isLocalhost ? `${window.location.protocol}//${window.location.hostname}:3003` : window.location.origin;
 }
 
 const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL || getDefaultApiBaseUrl()).replace(/\/$/, '');

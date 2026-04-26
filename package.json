@@ -7,7 +7,7 @@
     "start": "node backend/src/app.js",
     "client": "npm start --prefix frontend",
     "dev": "concurrently \"PORT=3003 npm run start\" \"PORT=3004 npm run client\"",
-    "build": "npm run build --prefix frontend"
+    "build": "npm run build --prefix frontend && rm -rf public && cp -R frontend/build public"
   },
   "dependencies": {
     "concurrently": "^6.0.0"
