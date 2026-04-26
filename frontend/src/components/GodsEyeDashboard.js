@@ -20,7 +20,6 @@ import { useAdaptivePolling } from '../hooks/useAdaptivePolling';
 import {
   buildProjectedCctvRays,
   buildMockCctv,
-  fetchIntelSnapshot,
   resolveCctvFeed
 } from '../services/intel';
 import { getTerrainConfig } from '../services/terrain';
@@ -33,6 +32,7 @@ import {
   TRAIL_RETENTION_MS,
   VISUAL_SKINS
 } from '../config/constants';
+import { createWorldviewLayerRegistry } from '../layers/layerRegistry';
 
 const WEBHOOK_URL = process.env.REACT_APP_ALERT_WEBHOOK_URL || '';
 
@@ -216,6 +216,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const [playbackIndex, setPlaybackIndex] = useState(0);
 
   const [selectedFlightId, setSelectedFlightId] = useState(null);
+  const [selectedSatelliteId, setSelectedSatelliteId] = useState(null);
   const [selectedCctvId, setSelectedCctvId] = useState(null);
   const [trackTarget, setTrackTarget] = useState(true);
   const [densityMode, setDensityMode] = useState(false);
@@ -237,6 +238,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     streetTraffic: false
   });
   const [cctvDirectoryQuery, setCctvDirectoryQuery] = useState('');
+  const [minSeismicMagnitude, setMinSeismicMagnitude] = useState(2.5);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
@@ -269,6 +271,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     fetchedAt: null
   });
   const [intelStatus, setIntelStatus] = useState('connecting');
+  const [layerTelemetry, setLayerTelemetry] = useState({});
 
   const [recordings, setRecordings] = useState(createRecordingState());
   const [activeAlerts, setActiveAlerts] = useState([]);
@@ -297,6 +300,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const metricsRef = useRef(createFrontendMetrics());
   const latestFlightsRef = useRef([]);
   const autoPerfTunedRef = useRef(false);
+  const layerRegistryRef = useRef(createWorldviewLayerRegistry());
   const terrainConfig = useMemo(() => getTerrainConfig(), []);
 
   const handleDensityToggle = useCallback(() => {
@@ -316,11 +320,21 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   }, []);
 
   const handleAircraftVisibilityToggle = useCallback(() => {
-    setShowAircraft((previous) => !previous);
+    setShowAircraft((previous) => {
+      const next = !previous;
+      layerRegistryRef.current.setLayerEnabled('flights', next);
+      setLayerTelemetry(layerRegistryRef.current.getLayerTelemetry());
+      return next;
+    });
   }, []);
 
   const handleSatellitesToggle = useCallback(() => {
-    setIntelLayers((previous) => ({ ...previous, satellites: !previous.satellites }));
+    setIntelLayers((previous) => {
+      const next = !previous.satellites;
+      layerRegistryRef.current.setLayerEnabled('satellites', next);
+      setLayerTelemetry(layerRegistryRef.current.getLayerTelemetry());
+      return { ...previous, satellites: next };
+    });
   }, []);
 
   const handleMilitaryToggle = useCallback(() => {
@@ -330,6 +344,8 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const handleSeismicToggle = useCallback(() => {
     const nextEnabled = !intelLayers.seismic;
     setIntelLayers((previous) => ({ ...previous, seismic: nextEnabled }));
+    layerRegistryRef.current.setLayerEnabled('earthquakes', nextEnabled);
+    setLayerTelemetry(layerRegistryRef.current.getLayerTelemetry());
 
     if (nextEnabled) {
       setPendingIntelFocus('seismic');
@@ -343,6 +359,8 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const handleCctvToggle = useCallback(() => {
     const nextEnabled = !intelLayers.cctv;
     setIntelLayers((previous) => ({ ...previous, cctv: nextEnabled }));
+    layerRegistryRef.current.setLayerEnabled('cctv', nextEnabled);
+    setLayerTelemetry(layerRegistryRef.current.getLayerTelemetry());
 
     if (nextEnabled) {
       setSensorMode(true);
@@ -357,7 +375,12 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   }, [intelLayers.cctv]);
 
   const handleStreetTrafficToggle = useCallback(() => {
-    setIntelLayers((previous) => ({ ...previous, streetTraffic: !previous.streetTraffic }));
+    setIntelLayers((previous) => {
+      const next = !previous.streetTraffic;
+      layerRegistryRef.current.setLayerEnabled('traffic', next);
+      setLayerTelemetry(layerRegistryRef.current.getLayerTelemetry());
+      return { ...previous, streetTraffic: next };
+    });
   }, []);
 
   const handleVisualSkinChange = useCallback((skinId) => {
@@ -382,6 +405,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
 
   useEffect(() => {
     if (selectedFlightId) {
+      setSelectedSatelliteId(null);
       setSelectedCctvId(null);
       setCctvFeedState({ status: 'idle', feed: null, feeds: [], error: '' });
       setFocusTarget(null);
@@ -420,6 +444,14 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     }, 1000);
 
     return () => clearInterval(timeTimer);
+  }, []);
+
+  useEffect(() => {
+    const layerRegistry = layerRegistryRef.current;
+    setLayerTelemetry(layerRegistry.getLayerTelemetry());
+    return () => {
+      layerRegistry.cleanup();
+    };
   }, []);
 
   const handleFlightSnapshot = useCallback((snapshot) => {
@@ -475,6 +507,12 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     setProviderGovernance(snapshot.governance || PROVIDER_GOVERNANCE.mock);
     setProviderErrors(snapshot.providerErrors || []);
     setLastUpdatedAt(new Date(snapshot.fetchedAt || Date.now()));
+    layerRegistryRef.current.updateFlightTelemetry(
+      flightsWithTrail,
+      snapshot.source || 'mock',
+      snapshot.error || ''
+    );
+    setLayerTelemetry(layerRegistryRef.current.getLayerTelemetry());
 
     setRecordings((previousRecording) => (
       updateRecordingState(previousRecording, flightsWithTrail, now)
@@ -505,6 +543,8 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const handleFlightError = useCallback((error) => {
     setConnectionStatus('degraded');
     setConnectionMessage(error.message || 'Failed to update flight feed');
+    layerRegistryRef.current.updateFlightTelemetry([], 'mock', error.message || 'Flight fetch failed');
+    setLayerTelemetry(layerRegistryRef.current.getLayerTelemetry());
   }, []);
 
   useAdaptivePolling({
@@ -533,12 +573,13 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
 
     const pullIntel = async () => {
       try {
-        const snapshot = await fetchIntelSnapshot();
+        const snapshot = await layerRegistryRef.current.fetchIntel();
         if (!active) {
           return;
         }
 
         setIntelSnapshot(snapshot);
+        setLayerTelemetry(layerRegistryRef.current.getLayerTelemetry());
         hasLiveSource = Object.values(snapshot.sources || {})
           .some((source) => source && source.source === 'live');
         setIntelStatus(hasLiveSource ? 'online' : 'mock');
@@ -772,8 +813,10 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   );
 
   const seismicEvents = useMemo(
-    () => (intelLayers.seismic ? intelSnapshot.seismic : []),
-    [intelLayers.seismic, intelSnapshot.seismic]
+    () => (intelLayers.seismic
+      ? (intelSnapshot.seismic || []).filter((event) => (event?.magnitude || 0) >= minSeismicMagnitude)
+      : []),
+    [intelLayers.seismic, intelSnapshot.seismic, minSeismicMagnitude]
   );
 
   const streetTraffic = useMemo(
@@ -784,6 +827,11 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
   const cctvNodes = useMemo(
     () => (intelLayers.cctv ? intelSnapshot.cctv : []),
     [intelLayers.cctv, intelSnapshot.cctv]
+  );
+
+  const selectedSatellite = useMemo(
+    () => satelliteTracks.find((satellite) => satellite.id === selectedSatelliteId) || null,
+    [satelliteTracks, selectedSatelliteId]
   );
 
   const selectedCctvNode = useMemo(
@@ -947,6 +995,27 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     focusIntelLocation('cctv', node);
   }, [focusIntelLocation]);
 
+  const focusSatelliteNode = useCallback((satellite) => {
+    if (!satellite || !Number.isFinite(satellite.lat) || !Number.isFinite(satellite.lon)) {
+      return;
+    }
+
+    setSelectedFlightId(null);
+    setSelectedCctvId(null);
+    setTrackTarget(false);
+    setCameraMode('region');
+    setSelectedSatelliteId(satellite.id);
+    setFocusTarget({
+      id: `satellite-${satellite.id}-${Date.now()}`,
+      kind: 'satellite',
+      label: satellite.name || satellite.id,
+      lat: satellite.lat,
+      lon: satellite.lon,
+      zoom: 1.95,
+      tiltDeg: 24
+    });
+  }, []);
+
   useEffect(() => {
     if (selectedFlightId || !pendingIntelFocus) {
       return;
@@ -1108,6 +1177,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
 
   const handleSelectFlight = useCallback((nextFlightId) => {
     setSelectedFlightId(nextFlightId);
+    setSelectedSatelliteId(null);
     setSelectedCctvId(null);
     setCctvFeedState({ status: 'idle', feed: null, feeds: [], error: '' });
     setFocusTarget(null);
@@ -1127,6 +1197,22 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
     }
   }, [audioEnabled]);
 
+  const handleSelectSatellite = useCallback((nextSatelliteId) => {
+    if (!nextSatelliteId) {
+      setSelectedSatelliteId(null);
+      setFocusTarget((previous) => (previous?.kind === 'satellite' ? null : previous));
+      return;
+    }
+
+    const satellite = satelliteTracks.find((entry) => entry.id === nextSatelliteId);
+    if (!satellite) {
+      setSelectedSatelliteId(nextSatelliteId);
+      return;
+    }
+
+    focusSatelliteNode(satellite);
+  }, [satelliteTracks, focusSatelliteNode]);
+
   const handleSelectCctv = useCallback((nextNodeId) => {
     if (!nextNodeId) {
       setSelectedCctvId(null);
@@ -1141,6 +1227,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
       return;
     }
 
+    setSelectedSatelliteId(null);
     focusCctvNode(node);
   }, [cctvNodes, focusCctvNode]);
 
@@ -1251,8 +1338,10 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
           performanceMode={renderPerformanceMode}
           showAircraft={showAircraft}
           selectedFlightId={selectedFlightId}
+          selectedSatelliteId={selectedSatelliteId}
           selectedCctvId={selectedCctvId}
           onSelectFlight={handleSelectFlight}
+          onSelectSatellite={handleSelectSatellite}
           onSelectCctv={handleSelectCctv}
           cameraMode={cameraMode}
           cameraRegion={cameraRegion}
@@ -1285,6 +1374,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
                 performanceMode={renderPerformanceMode}
                 showAircraft={showAircraft}
                 selectedFlightId={selectedFlightId}
+                selectedSatelliteId={selectedSatelliteId}
                 selectedCctvId={null}
                 cameraMode="overview"
                 cameraRegion="global"
@@ -1315,6 +1405,7 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
                 performanceMode={renderPerformanceMode}
                 showAircraft={showAircraft}
                 selectedFlightId={selectedFlightId}
+                selectedSatelliteId={selectedSatelliteId}
                 selectedCctvId={null}
                 cameraMode="region"
                 cameraRegion={cameraRegion}
@@ -1623,6 +1714,45 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
           </div>
         )}
 
+        <div className="panel-subtitle">Satellite Tracking</div>
+        {satelliteTracks.length ? (
+          <>
+            {selectedSatellite ? (
+              <div className="target-grid">
+                <div>
+                  <span>Name</span>
+                  <strong>{selectedSatellite.name || selectedSatellite.id}</strong>
+                </div>
+                <div>
+                  <span>NORAD ID</span>
+                  <strong>{selectedSatellite.noradId || selectedSatellite.id}</strong>
+                </div>
+                <div>
+                  <span>Altitude</span>
+                  <strong>{Number(selectedSatellite.altitudeKm || 0).toFixed(0)} km</strong>
+                </div>
+                <div>
+                  <span>Speed</span>
+                  <strong>{Number(selectedSatellite.speedKps || 0).toFixed(2)} km/s</strong>
+                </div>
+              </div>
+            ) : null}
+            <div className="link-list">
+              {satelliteTracks.slice(0, 4).map((satellite) => (
+                <div key={satellite.id}>
+                  <strong>{satellite.name || satellite.id}</strong>
+                  <span>{satellite.noradId || satellite.id} · {Number(satellite.altitudeKm || 0).toFixed(0)} km</span>
+                  <button type="button" onClick={() => handleSelectSatellite(satellite.id)}>
+                    {selectedSatelliteId === satellite.id ? 'Following' : 'Focus'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="target-empty">Satellite layer disabled or no records available.</div>
+        )}
+
         <div className="panel-subtitle">Multi-Intel Layers</div>
         <div className="recording-grid">
           <div>
@@ -1643,10 +1773,12 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
           </div>
         </div>
         <div className="provider-errors">
-          <div>Sat feed: {intelSnapshot.sources?.satellites?.source || 'unknown'} · {intelSnapshot.sources?.satellites?.note || 'n/a'}</div>
-          <div>Seismic: {intelSnapshot.sources?.seismic?.source || 'unknown'} · {intelSnapshot.sources?.seismic?.note || 'n/a'}</div>
-          <div>CCTV: {intelSnapshot.sources?.cctv?.source || 'unknown'} · {intelSnapshot.sources?.cctv?.note || 'n/a'}</div>
-          <div>Street: {intelSnapshot.sources?.streetTraffic?.source || 'unknown'} · {intelSnapshot.sources?.streetTraffic?.note || 'n/a'}</div>
+          {Object.entries(layerTelemetry || {}).map(([layerId, layerState]) => (
+            <div key={layerId}>
+              {layerState.name}: {layerState.status} · {layerState.source} · {layerState.count} objects
+              {layerState.error ? ` · error: ${layerState.error}` : ''}
+            </div>
+          ))}
         </div>
 
         <div className="panel-subtitle">CCTV Viewer</div>
@@ -1763,6 +1895,19 @@ function GodsEyeDashboard({ currentUser = null, onLogout = null }) {
         )}
 
         <div className="panel-subtitle">Seismic Watchlist</div>
+        <div className="filter-row">
+          <label htmlFor="seismic-min-mag">Min magnitude</label>
+          <input
+            id="seismic-min-mag"
+            type="range"
+            min="0"
+            max="7"
+            step="0.1"
+            value={minSeismicMagnitude}
+            onChange={(event) => setMinSeismicMagnitude(Number(event.target.value))}
+          />
+          <span>{minSeismicMagnitude.toFixed(1)}+</span>
+        </div>
         {intelLayers.seismic && seismicEvents.length ? (
           <div className="link-list">
             {seismicEvents.slice(0, 4).map((event) => (

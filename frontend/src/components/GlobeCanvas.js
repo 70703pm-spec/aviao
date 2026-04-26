@@ -878,7 +878,34 @@ function applyVisualSkin(ctx, width, height, visualSkin, now, tier = 'high') {
     ctx.fillStyle = 'rgba(16, 17, 31, 0.3)';
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
+    return;
   }
+
+  if (visualSkin === 'highContrast') {
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(4, 7, 15, 0.38)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = 'rgba(210, 238, 255, 0.16)';
+    ctx.fillRect(0, 0, width, height);
+
+    const vignette = ctx.createRadialGradient(
+      width / 2,
+      height / 2,
+      Math.min(width, height) * 0.2,
+      width / 2,
+      height / 2,
+      Math.max(width, height) * 0.65
+    );
+    vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+
 }
 
 function drawSensorVolume(ctx, sensor, camera, viewport, globeRadius, nowMs, tier = 'high') {
@@ -1020,8 +1047,10 @@ function GlobeCanvas({
   performanceMode = 'balanced',
   showAircraft = true,
   selectedFlightId,
+  selectedSatelliteId = null,
   selectedCctvId = null,
   onSelectFlight,
+  onSelectSatellite,
   onSelectCctv,
   cameraMode,
   cameraRegion,
@@ -1048,6 +1077,7 @@ function GlobeCanvas({
   const fpsRef = useRef({ frameCount: 0, startMs: performance.now() });
   const pixelRatioRef = useRef(1);
   const onSelectFlightRef = useRef(onSelectFlight);
+  const onSelectSatelliteRef = useRef(onSelectSatellite);
   const onSelectCctvRef = useRef(onSelectCctv);
   const onSelectionHitRef = useRef(onSelectionHit);
   const onRenderFpsRef = useRef(onRenderFps);
@@ -1124,6 +1154,10 @@ function GlobeCanvas({
   useEffect(() => {
     onSelectFlightRef.current = onSelectFlight;
   }, [onSelectFlight]);
+
+  useEffect(() => {
+    onSelectSatelliteRef.current = onSelectSatellite;
+  }, [onSelectSatellite]);
 
   useEffect(() => {
     onSelectCctvRef.current = onSelectCctv;
@@ -1286,6 +1320,9 @@ function GlobeCanvas({
         if (typeof onSelectFlightRef.current === 'function') {
           onSelectFlightRef.current(null);
         }
+        if (typeof onSelectSatelliteRef.current === 'function') {
+          onSelectSatelliteRef.current(null);
+        }
         if (typeof onSelectCctvRef.current === 'function') {
           onSelectCctvRef.current(best.id);
         }
@@ -1294,12 +1331,29 @@ function GlobeCanvas({
         if (typeof onSelectCctvRef.current === 'function') {
           onSelectCctvRef.current(null);
         }
+        if (typeof onSelectSatelliteRef.current === 'function') {
+          onSelectSatelliteRef.current(null);
+        }
         if (typeof onSelectFlightRef.current === 'function') {
           onSelectFlightRef.current(best.id);
+        }
+      } else if (best?.kind === 'satellite') {
+        cameraRef.current.userInteractingUntil = 0;
+        if (typeof onSelectFlightRef.current === 'function') {
+          onSelectFlightRef.current(null);
+        }
+        if (typeof onSelectCctvRef.current === 'function') {
+          onSelectCctvRef.current(null);
+        }
+        if (typeof onSelectSatelliteRef.current === 'function') {
+          onSelectSatelliteRef.current(best.id);
         }
       } else {
         if (typeof onSelectFlightRef.current === 'function') {
           onSelectFlightRef.current(null);
+        }
+        if (typeof onSelectSatelliteRef.current === 'function') {
+          onSelectSatelliteRef.current(null);
         }
         if (typeof onSelectCctvRef.current === 'function') {
           onSelectCctvRef.current(null);
@@ -1549,6 +1603,7 @@ function GlobeCanvas({
       const hitGrid = new Map();
       const projectedById = new Map();
       const cctvLookup = new Map();
+      const satelliteLookup = new Map();
 
       if (cctvNodes.length) {
         cctvNodes.forEach((node) => {
@@ -1576,6 +1631,36 @@ function GlobeCanvas({
             x: projected.x,
             y: projected.y,
             hitRadius: Math.max(11, size * 2.2)
+          });
+        });
+      }
+
+      if (satellites.length) {
+        satellites.forEach((satellite) => {
+          const projected = projectPoint(satellite.lat, satellite.lon, camera, viewport, globeRadius);
+          if (!projected.visible) {
+            return;
+          }
+
+          const size = satellite.id === selectedSatelliteId ? 6.4 : 4.4;
+          satelliteLookup.set(satellite.id, {
+            x: projected.x,
+            y: projected.y,
+            size,
+            visible: true
+          });
+
+          const cellKey = `${quantize(projected.x, HIT_CELL_SIZE)}|${quantize(projected.y, HIT_CELL_SIZE)}`;
+          if (!hitGrid.has(cellKey)) {
+            hitGrid.set(cellKey, []);
+          }
+
+          hitGrid.get(cellKey).push({
+            kind: 'satellite',
+            id: satellite.id,
+            x: projected.x,
+            y: projected.y,
+            hitRadius: Math.max(10, size * 2.2)
           });
         });
       }
@@ -1736,6 +1821,22 @@ function GlobeCanvas({
         context.restore();
       }
 
+      if (!mini && selectedSatelliteId && satelliteLookup.has(selectedSatelliteId)) {
+        const satMarker = satelliteLookup.get(selectedSatelliteId);
+
+        context.save();
+        context.translate(satMarker.x, satMarker.y);
+        context.strokeStyle = 'rgba(147, 234, 255, 0.92)';
+        context.lineWidth = 1.2;
+        context.setLineDash([4, 4]);
+        context.lineDashOffset = -(now * 0.045) % 60;
+        context.beginPath();
+        context.arc(0, 0, satMarker.size + 8 + Math.sin(now * 0.006) * 1.2, 0, Math.PI * 2);
+        context.stroke();
+        context.setLineDash([]);
+        context.restore();
+      }
+
       context.restore();
       applyVisualSkin(context, width, height, visualSkin, now, qualityTier);
 
@@ -1775,6 +1876,7 @@ function GlobeCanvas({
     selectedPredictionPath,
     selectedFlight,
     selectedFlightId,
+    selectedSatelliteId,
     selectedCctvId,
     cameraMode,
     cameraRegion,

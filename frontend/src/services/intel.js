@@ -11,7 +11,10 @@ import { destinationPoint } from '../utils/geo';
 const SATELLITE_API_URL = process.env.REACT_APP_SATELLITE_API_URL || '';
 const SEISMIC_API_URL = process.env.REACT_APP_SEISMIC_API_URL || 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson';
 const CCTV_API_URL = process.env.REACT_APP_CCTV_API_URL || '';
-const STREET_TRAFFIC_API_URL = process.env.REACT_APP_STREET_TRAFFIC_API_URL || '';
+const STREET_TRAFFIC_API_URL = process.env.REACT_APP_STREET_TRAFFIC_API_URL || process.env.REACT_APP_OVERPASS_API_URL || '';
+const CELESTRAK_BASE_URL = process.env.REACT_APP_CELESTRAK_BASE_URL || 'https://celestrak.org/NORAD/elements/gp.php';
+const CELESTRAK_GROUP = process.env.REACT_APP_CELESTRAK_GROUP || 'ACTIVE';
+const CELESTRAK_FORMAT = (process.env.REACT_APP_CELESTRAK_FORMAT || 'json').toLowerCase();
 
 const STREET_TRAFFIC_KEY = process.env.REACT_APP_STREET_TRAFFIC_KEY || '';
 const SATELLITE_API_KEY = process.env.REACT_APP_SATELLITE_API_KEY || '';
@@ -24,6 +27,151 @@ const liveCache = {
   snapshot: null,
   fetchedAtMs: 0
 };
+
+
+function hashIdToUnit(value) {
+  const text = String(value || 'satellite');
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+  }
+
+  return (hash % 100000) / 100000;
+}
+
+function buildCelestrakDefaultUrl() {
+  const format = CELESTRAK_FORMAT === 'tle' ? 'TLE' : CELESTRAK_FORMAT === 'csv' ? 'CSV' : 'JSON';
+  return `${CELESTRAK_BASE_URL}?GROUP=${encodeURIComponent(CELESTRAK_GROUP)}&FORMAT=${format}`;
+}
+
+function parseCelestrakCsv(text) {
+  const rows = String(text || '').trim().split(/\r?\n/).filter(Boolean);
+  if (rows.length < 2) {
+    return [];
+  }
+
+  const headers = rows[0].split(',').map((entry) => entry.trim().toLowerCase());
+  const satnumIndex = headers.indexOf('norad_cat_id');
+  const nameIndex = headers.indexOf('object_name');
+  const incIndex = headers.indexOf('inclination');
+  const meanMotionIndex = headers.indexOf('mean_motion');
+
+  return rows.slice(1).map((row) => {
+    const columns = row.split(',').map((entry) => entry.trim());
+    return {
+      noradCatId: columns[satnumIndex],
+      objectName: columns[nameIndex],
+      inclination: Number(columns[incIndex]),
+      meanMotion: Number(columns[meanMotionIndex])
+    };
+  });
+}
+
+function parseCelestrakTle(text) {
+  const rows = String(text || '').split(/\r?\n/).map((entry) => entry.trim()).filter(Boolean);
+  const records = [];
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const line = rows[index];
+    if (!line.startsWith('1 ')) {
+      continue;
+    }
+
+    const line1 = line;
+    const line2 = rows[index + 1] && rows[index + 1].startsWith('2 ') ? rows[index + 1] : '';
+    const nameCandidate = index > 0 && !rows[index - 1].startsWith('1 ') && !rows[index - 1].startsWith('2 ')
+      ? rows[index - 1]
+      : `NORAD-${line1.slice(2, 7).trim()}`;
+
+    const norad = line1.slice(2, 7).trim();
+    const inclination = Number(line2.slice(8, 16).trim());
+    const meanMotion = Number(line2.slice(52, 63).trim());
+
+    records.push({
+      noradCatId: norad,
+      objectName: nameCandidate,
+      inclination: Number.isFinite(inclination) ? inclination : 0,
+      meanMotion: Number.isFinite(meanMotion) ? meanMotion : 15
+    });
+  }
+
+  return records;
+}
+
+export function normalizeCelestrakSatellites(records, nowMs = Date.now()) {
+  const elapsedMinutes = nowMs / 60000;
+  return (Array.isArray(records) ? records : [])
+    .slice(0, 300)
+    .map((record, index) => {
+      const norad = String(record?.noradCatId || record?.NORAD_CAT_ID || record?.satnum || '').trim();
+      const name = String(record?.objectName || record?.OBJECT_NAME || record?.name || norad || `SAT-${index + 1}`).trim();
+
+      if (!norad && !name) {
+        return null;
+      }
+
+      const inclination = Number(record?.inclination ?? record?.INCLINATION ?? 53);
+      const meanMotion = Number(record?.meanMotion ?? record?.MEAN_MOTION ?? 15);
+      const phase = (elapsedMinutes / (1440 / Math.max(0.5, meanMotion)) + hashIdToUnit(`${norad}-${name}`)) % 1;
+      const lon = phase * 360 - 180;
+      const lat = Math.sin(phase * Math.PI * 2) * (Number.isFinite(inclination) ? inclination : 53);
+      const heading = normalizeAngle(phase * 360 + 90);
+      const altitudeKm = Number(record?.altitudeKm ?? record?.ALTITUDE_KM ?? 550);
+
+      const trail = Array.from({ length: 14 }, (_, trailIndex) => {
+        const ratio = trailIndex / 13;
+        const historyPhase = (phase - ratio * 0.05 + 1) % 1;
+        return {
+          lat: Math.sin(historyPhase * Math.PI * 2) * (Number.isFinite(inclination) ? inclination : 53),
+          lon: historyPhase * 360 - 180
+        };
+      });
+
+      return {
+        id: norad || name,
+        noradId: norad || 'unknown',
+        name,
+        lat,
+        lon,
+        altitudeKm,
+        heading,
+        speedKps: Number((2 * Math.PI * (6371 + altitudeKm) / ((1440 / Math.max(0.5, meanMotion)) * 60)).toFixed(2)),
+        trail,
+        status: 'active',
+        source: 'celestrak'
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildOverpassRoadQuery({ latMin, lonMin, latMax, lonMax }) {
+  return `[out:json][timeout:25];(way["highway"](${latMin},${lonMin},${latMax},${lonMax}););out center 300;`;
+}
+
+function mapOverpassTraffic(payload) {
+  const elements = Array.isArray(payload?.elements) ? payload.elements : [];
+
+  return elements
+    .filter((element) => element?.type === 'way' && Number.isFinite(element?.center?.lat) && Number.isFinite(element?.center?.lon))
+    .slice(0, 700)
+    .map((element, index) => {
+      const name = element?.tags?.name || element?.tags?.ref || `Road ${index + 1}`;
+      const importance = element?.tags?.highway || 'road';
+      const seed = hashIdToUnit(`${element.id}-${importance}`);
+      const intensity = 0.25 + seed * 0.7;
+
+      return {
+        id: `overpass-${element.id}`,
+        label: name,
+        lat: element.center.lat,
+        lon: element.center.lon,
+        intensity,
+        speedKph: Math.max(8, Math.round(60 - intensity * 40)),
+        congestion: intensity > 0.7 ? 'heavy' : intensity > 0.45 ? 'moderate' : 'light',
+        source: 'overpass'
+      };
+    });
+}
 
 const SATELLITE_SEEDS = [
   { id: 'ISS', name: 'ISS', inclination: 51.6, altitudeKm: 408, periodMin: 92.9, phase: 0.08 },
@@ -554,23 +702,22 @@ function mapRemoteCctv(payload) {
 }
 
 async function fetchSatellites(nowMs, signal) {
-  if (!SATELLITE_API_URL) {
-    return {
-      source: 'mock',
-      items: buildMockSatellites(nowMs),
-      note: 'REACT_APP_SATELLITE_API_URL not configured; using orbital simulation.'
-    };
-  }
+  const satelliteUrl = SATELLITE_API_URL || buildCelestrakDefaultUrl();
+  const expectedFormat = SATELLITE_API_URL
+    ? 'json'
+    : CELESTRAK_FORMAT;
 
   const headers = {
-    Accept: 'application/json'
+    Accept: expectedFormat === 'tle' || expectedFormat === 'csv'
+      ? 'text/plain, application/json'
+      : 'application/json, text/plain'
   };
 
   if (SATELLITE_API_KEY) {
     headers['Authorization'] = `Bearer ${SATELLITE_API_KEY}`;
   }
 
-  const response = await withTimeout(SATELLITE_API_URL, {
+  const response = await withTimeout(satelliteUrl, {
     method: 'GET',
     headers,
     signal
@@ -580,8 +727,20 @@ async function fetchSatellites(nowMs, signal) {
     throw new Error(`Satellite feed failed (${response.status})`);
   }
 
-  const payload = await response.json();
-  const items = mapRemoteSatellites(payload);
+  let items = [];
+
+  if (expectedFormat === 'tle') {
+    const text = await response.text();
+    items = normalizeCelestrakSatellites(parseCelestrakTle(text), nowMs);
+  } else if (expectedFormat === 'csv') {
+    const text = await response.text();
+    items = normalizeCelestrakSatellites(parseCelestrakCsv(text), nowMs);
+  } else {
+    const payload = await response.json();
+    items = SATELLITE_API_URL
+      ? mapRemoteSatellites(payload)
+      : normalizeCelestrakSatellites(Array.isArray(payload) ? payload : payload?.satellites || [], nowMs);
+  }
 
   if (!items.length) {
     throw new Error('Satellite feed returned no usable records');
@@ -590,7 +749,9 @@ async function fetchSatellites(nowMs, signal) {
   return {
     source: 'live',
     items,
-    note: `Satellite feed connected (${SATELLITE_API_URL})`
+    note: SATELLITE_API_URL
+      ? `Satellite feed connected (${SATELLITE_API_URL})`
+      : `CelesTrak feed connected (${satelliteUrl})`
   };
 }
 
@@ -673,6 +834,7 @@ async function fetchStreetTraffic(nowMs, signal) {
     };
   }
 
+  const isOverpass = STREET_TRAFFIC_API_URL.includes('overpass');
   const headers = {
     Accept: 'application/json'
   };
@@ -681,18 +843,38 @@ async function fetchStreetTraffic(nowMs, signal) {
     headers['Authorization'] = `Bearer ${STREET_TRAFFIC_KEY}`;
   }
 
-  const response = await withTimeout(STREET_TRAFFIC_API_URL, {
-    method: 'GET',
-    headers,
-    signal
-  });
+  let response;
+
+  if (isOverpass) {
+    const bbox = {
+      latMin: -34,
+      lonMin: -74,
+      latMax: 41,
+      lonMax: -34
+    };
+    response = await withTimeout(STREET_TRAFFIC_API_URL, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({ data: buildOverpassRoadQuery(bbox) }),
+      signal
+    });
+  } else {
+    response = await withTimeout(STREET_TRAFFIC_API_URL, {
+      method: 'GET',
+      headers,
+      signal
+    });
+  }
 
   if (!response.ok) {
     throw new Error(`Traffic feed failed (${response.status})`);
   }
 
   const payload = await response.json();
-  const items = mapRemoteTraffic(payload);
+  const items = isOverpass ? mapOverpassTraffic(payload) : mapRemoteTraffic(payload);
 
   if (!items.length) {
     throw new Error('Traffic feed returned no usable records');
@@ -701,7 +883,9 @@ async function fetchStreetTraffic(nowMs, signal) {
   return {
     source: 'live',
     items,
-    note: 'Street traffic stream active'
+    note: isOverpass
+      ? 'Street traffic stream active via Overpass/OSM roads.'
+      : 'Street traffic stream active'
   };
 }
 
