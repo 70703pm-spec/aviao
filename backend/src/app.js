@@ -19,9 +19,7 @@ const configuredOrigins = String(process.env.CORS_ORIGIN || '')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
-const allowedOrigins = configuredOrigins.length > 0
-    ? configuredOrigins
-    : ['http://localhost:3000', 'http://localhost:3004'];
+const allowedOrigins = configuredOrigins;
 
 const serverStartedAt = Date.now();
 const requestCounts = new Map();
@@ -49,9 +47,17 @@ app.use((req, res, next) => {
 // Middleware
 app.use((req, res, next) => {
     const requestOrigin = req.headers.origin;
-    const allowOrigin = requestOrigin && allowedOrigins.includes(requestOrigin)
-        ? requestOrigin
-        : allowedOrigins[0];
+    const allowAnyOrigin = allowedOrigins.length === 0;
+
+    let allowOrigin = '*';
+
+    if (requestOrigin) {
+        if (allowAnyOrigin || allowedOrigins.includes(requestOrigin)) {
+            allowOrigin = requestOrigin;
+        } else {
+            allowOrigin = allowedOrigins[0];
+        }
+    }
 
     res.header('Access-Control-Allow-Origin', allowOrigin);
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
