@@ -39,6 +39,51 @@ npm run dev
 
 That starts the backend on `http://localhost:3003` and the frontend on `http://localhost:3004`.
 
+## Vercel Deployment Notes
+
+When deploying from the repository root, Vercel must use the frontend build output folder:
+
+- Build Command: `npm run build`
+- Output Directory: `frontend/build`
+
+This is already configured in the root `vercel.json`.
+
+
+## Geospatial Data Sources (WorldView Mode)
+
+The dashboard can run fully in demo/mock mode, but you can enable live feeds with environment variables in `frontend/.env`.
+
+### Required for richer live telemetry
+
+- OpenSky OAuth client credentials
+  - `REACT_APP_OPENSKY_CLIENT_ID`
+  - `REACT_APP_OPENSKY_CLIENT_SECRET`
+  - `REACT_APP_OPENSKY_TOKEN_URL`
+  - optional: `REACT_APP_OPENSKY_BBOX` (`latMin,lonMin,latMax,lonMax`)
+- CelesTrak source tuning (no key required in most cases)
+  - `REACT_APP_CELESTRAK_BASE_URL`
+  - `REACT_APP_CELESTRAK_GROUP`
+  - `REACT_APP_CELESTRAK_FORMAT` (`json`, `csv`, `tle`)
+- Traffic/OSM via Overpass (no key required in most cases)
+  - `REACT_APP_STREET_TRAFFIC_API_URL`
+  - optional: `REACT_APP_OVERPASS_API_URL`
+- CCTV optional feed and webcam resolver
+  - `REACT_APP_CCTV_API_URL`
+  - optional: `REACT_APP_WINDY_WEBCAMS_KEY`
+
+### Optional providers
+
+- ADS-B Exchange (optional)
+  - `REACT_APP_ADSB_EXCHANGE_URL`
+  - `REACT_APP_ADSB_EXCHANGE_KEY`
+
+### Notes
+
+- Never commit real API secrets.
+- If a live source is missing/unavailable, the app falls back to mock data.
+- Public services such as OpenSky/Overpass/CelesTrak can enforce fair-use/rate limits.
+- CelesTrak TLE/CSV/JSON parsing is implemented; true SGP4-grade orbital propagation can be added later if your environment allows `satellite.js`.
+
 ## Authentication
 
 The backend seeds one default local operator account on startup when MongoDB is available:

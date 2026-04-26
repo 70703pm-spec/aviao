@@ -664,6 +664,27 @@ select {
   margin-bottom: 8px;
 }
 
+
+.filter-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.filter-row label,
+.filter-row span {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.filter-row input[type='range'] {
+  width: 100%;
+}
+
 .cctv-feed-card {
   display: grid;
   gap: 8px;

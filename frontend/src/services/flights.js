@@ -10,6 +10,10 @@ const OPEN_SKY_ENDPOINT = process.env.REACT_APP_FLIGHTS_API_URL || 'https://open
 const ADSB_EXCHANGE_ENDPOINT = process.env.REACT_APP_ADSB_EXCHANGE_URL || '';
 const ADSB_EXCHANGE_KEY = process.env.REACT_APP_ADSB_EXCHANGE_KEY || '';
 const PROVIDER_PREFERENCE = (process.env.REACT_APP_FLIGHT_PROVIDER || 'auto').toLowerCase();
+const OPENSKY_CLIENT_ID = process.env.REACT_APP_OPENSKY_CLIENT_ID || '';
+const OPENSKY_CLIENT_SECRET = process.env.REACT_APP_OPENSKY_CLIENT_SECRET || '';
+const OPENSKY_TOKEN_URL = process.env.REACT_APP_OPENSKY_TOKEN_URL || 'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token';
+const OPENSKY_BBOX = process.env.REACT_APP_OPENSKY_BBOX || '';
 
 const AIRLINE_PREFIX = {
   AAL: 'American Airlines',
@@ -99,6 +103,10 @@ const REGION_BOUNDS = {
 
 let cachedSnapshot = null;
 let lastFetchStartedAt = 0;
+let openSkyTokenCache = {
+  token: '',
+  expiresAt: 0
+};
 
 function inferAirline(callsign) {
   if (!callsign) {
@@ -216,7 +224,52 @@ function normalizeFlight(partial, source) {
   };
 }
 
-function withOpenSkyHeaders() {
+async function buildOpenSkyHeaders(signal) {
+  const now = Date.now();
+  if (openSkyTokenCache.token && now < openSkyTokenCache.expiresAt) {
+    return {
+      Authorization: `Bearer ${openSkyTokenCache.token}`
+    };
+  }
+
+  if (OPENSKY_CLIENT_ID && OPENSKY_CLIENT_SECRET) {
+    const tokenResponse = await fetchWithTimeout(OPENSKY_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json'
+      },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: OPENSKY_CLIENT_ID,
+        client_secret: OPENSKY_CLIENT_SECRET
+      })
+    }, 9000, signal);
+
+    if (!tokenResponse.ok) {
+      throw new Error(`OpenSky auth failed (${tokenResponse.status})`);
+    }
+
+    const payload = await tokenResponse.json();
+    const accessToken = payload?.access_token;
+    const expiresInSeconds = Number.isFinite(payload?.expires_in)
+      ? payload.expires_in
+      : 300;
+
+    if (!accessToken) {
+      throw new Error('OpenSky auth response missing access_token');
+    }
+
+    openSkyTokenCache = {
+      token: accessToken,
+      expiresAt: Date.now() + Math.max(60, expiresInSeconds - 45) * 1000
+    };
+
+    return {
+      Authorization: `Bearer ${accessToken}`
+    };
+  }
+
   const username = process.env.REACT_APP_OPENSKY_USERNAME;
   const password = process.env.REACT_APP_OPENSKY_PASSWORD;
 
@@ -258,11 +311,21 @@ async function fetchWithTimeout(url, requestInit = {}, timeoutMs = 9000, externa
 }
 
 async function fetchOpenSkySnapshot(signal) {
-  const response = await fetchWithTimeout(OPEN_SKY_ENDPOINT, {
+  const authHeaders = await buildOpenSkyHeaders(signal);
+  let requestUrl = OPEN_SKY_ENDPOINT;
+
+  const bboxParts = OPENSKY_BBOX.split(',').map((value) => Number(value.trim()));
+  if (bboxParts.length === 4 && bboxParts.every((value) => Number.isFinite(value))) {
+    const [lamin, lomin, lamax, lomax] = bboxParts;
+    const separator = OPEN_SKY_ENDPOINT.includes('?') ? '&' : '?';
+    requestUrl = `${OPEN_SKY_ENDPOINT}${separator}lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`;
+  }
+
+  const response = await fetchWithTimeout(requestUrl, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
-      ...withOpenSkyHeaders()
+      ...authHeaders
     }
   }, 9000, signal);
 

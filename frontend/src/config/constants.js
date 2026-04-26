@@ -16,7 +16,8 @@ export const VISUAL_SKINS = {
   default: 'Default',
   crt: 'CRT',
   nightVision: 'Night Vision',
-  flir: 'FLIR'
+  flir: 'FLIR',
+  highContrast: 'High Contrast'
 };
 
 export const CAMERA_MODES = {
