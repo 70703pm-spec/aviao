@@ -1,12 +1,21 @@
 function getDefaultApiBaseUrl() {
   if (typeof window === 'undefined') {
-    return 'http://localhost:3003';
+    return process.env.REACT_APP_API_BASE_URL || 'http://localhost:3003';
   }
 
-  return `${window.location.protocol}//${window.location.hostname}:3003`;
+  const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+  if (!isLocalhost) {
+    const forceExternalApi = String(process.env.REACT_APP_FORCE_EXTERNAL_API || '').toLowerCase() === 'true';
+    return forceExternalApi && process.env.REACT_APP_API_BASE_URL
+      ? process.env.REACT_APP_API_BASE_URL
+      : window.location.origin;
+  }
+
+  return process.env.REACT_APP_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:3003`;
 }
 
-const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL || getDefaultApiBaseUrl()).replace(/\/$/, '');
+const API_BASE_URL = getDefaultApiBaseUrl().replace(/\/$/, '');
 const SESSION_TOKEN_KEY = 'gods_eye_session_token';
 const DEFAULT_AUTH_PROVIDERS = {
   google: { enabled: false, label: 'Google' },

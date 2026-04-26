@@ -49,3 +49,8 @@ If you want to contribute to this project, please fork the repository and submit
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Vercel deployment notes
+
+- For **single-project deploy** (frontend + `/api` in the same Vercel project), do **not** set `REACT_APP_API_BASE_URL`.
+- In production, the frontend defaults to same-origin API calls (e.g. `/api/...`).
+- Only set `REACT_APP_API_BASE_URL` together with `REACT_APP_FORCE_EXTERNAL_API=true` when you intentionally want a separate backend domain.

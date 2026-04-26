@@ -104,7 +104,8 @@ function getFrontendBaseUrl() {
         .map((value) => value.trim())
         .find(Boolean);
 
-    return (process.env.FRONTEND_URL || configuredOrigin || 'http://localhost:3004').replace(/\/$/, '');
+    const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
+    return (process.env.FRONTEND_URL || configuredOrigin || vercelOrigin || 'http://localhost:3004').replace(/\/$/, '');
 }
 
 function signOAuthState(payload) {
@@ -182,7 +183,8 @@ function sanitizeUser(user) {
 }
 
 function buildOAuthProviderConfig(provider) {
-    const backendBaseUrl = (process.env.AUTH_BASE_URL || `http://localhost:${process.env.PORT || 3002}`).replace(/\/$/, '');
+    const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
+    const backendBaseUrl = (process.env.AUTH_BASE_URL || vercelOrigin || `http://localhost:${process.env.PORT || 3002}`).replace(/\/$/, '');
     const callbackUrl = `${backendBaseUrl}/api/auth/oauth/${provider}/callback`;
 
     if (provider === 'google') {
